@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Installment calculator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#eef2f7;--surface:#fff;--ink:#14213d;--muted:#5b6b86;--line:#d5deea;--accent:#2347e8;--down:#14213d;--loan:#2347e8;--int:#f2a33a;--bad:#c2331f;
+color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1424;--surface:#16203a;--ink:#eaf0ff;--muted:#9aa9c7;--line:#2a3860;--accent:#7b96ff;--down:#eaf0ff;--loan:#7b96ff;--int:#f2b45a;--bad:#ff8a77;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0d1424;--surface:#16203a;--ink:#eaf0ff;--muted:#9aa9c7;--line:#2a3860;--accent:#7b96ff;--down:#eaf0ff;--loan:#7b96ff;--int:#f2b45a;--bad:#ff8a77;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+main{max-width:920px;margin:0 auto;padding:28px 18px 48px}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 24px;max-width:56ch}
+.grid{display:grid;grid-template-columns:1fr 1.15fr;gap:18px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+label{display:block;font-weight:600;margin:0 0 6px}
+.field{margin-bottom:18px}
+.row{display:flex;gap:10px;align-items:center}
+input[type=number],select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.hint{color:var(--muted);font-size:14px;margin-top:4px}
+.big{font-size:clamp(40px,8vw,64px);font-weight:800;letter-spacing:-.03em;line-height:1.05;margin:2px 0 4px}
+.big small{font-size:.38em;font-weight:600;color:var(--muted);letter-spacing:0}
+.bar{display:flex;height:22px;border-radius:11px;overflow:hidden;background:var(--line);margin:18px 0 10px}
+.bar span{display:block;height:100%;transition:width .25s}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+dl{margin:18px 0 0;display:grid;grid-template-columns:1fr auto;gap:0}
+dt,dd{margin:0;padding:10px 0;border-top:1px solid var(--line)}
+dd{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.err{color:var(--bad);font-weight:600}
+@media (prefers-reduced-motion:reduce){.bar span{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<h1>Installment calculator</h1>
+<p class="sub">Enter the price, how much you pay up front, and what you can pay each month. See how long it takes to finish.</p>
+<div class="grid">
+  <section class="panel" aria-label="Inputs">
+    <div class="field">
+      <label for="cur">Currency</label>
+      <select id="cur"><option value="USD">US dollar ($)</option><option value="KHR">Cambodian riel (៛)</option></select>
+    </div>
+    <div class="field">
+      <label for="price">Item price</label>
+      <input id="price" type="number" min="0" step="any" value="1200" inputmode="decimal">
+    </div>
+    <div class="field">
+      <label for="downPct">Down payment: <span id="downPctOut">20</span>%</label>
+      <input id="downPct" type="range" min="0" max="100" step="1" value="20">
+      <div class="hint" id="downAmt"></div>
+    </div>
+    <div class="field">
+      <label for="monthly">Monthly payment</label>
+      <input id="monthly" type="number" min="0" step="any" value="60" inputmode="decimal">
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label for="apr">Yearly interest rate (%)</label>
+      <input id="apr" type="number" min="0" step="0.1" value="0" inputmode="decimal">
+      <div class="hint">Leave at 0 for no interest.</div>
+    </div>
+  </section>
+  <section class="panel" aria-live="polite" aria-label="Results">
+    <div id="result"></div>
+  </section>
+</div>
+</main>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  function fmt(v){
+    var c=$('cur').value;
+    if(c==='KHR'){return '៛'+Math.round(v).toLocaleString('en-US')}
+    return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function span(months){
+    var y=Math.floor(months/12),m=months%12,p=[];
+    if(y)p.push(y+(y===1?' year':' years'));
+    if(m||!y)p.push(m+(m===1?' month':' months'));
+    return p.join(' ');
+  }
+  function calc(){
+    var price=Math.max(0,parseFloat($('price').value)||0);
+    var pct=parseFloat($('downPct').value)||0;
+    var pay=Math.max(0,parseFloat($('monthly').value)||0);
+    var apr=Math.max(0,parseFloat($('apr').value)||0);
+    $('downPctOut').textContent=pct;
+    var down=price*pct/100, loan=price-down, r=apr/100/12;
+    $('downAmt').textContent='Pay '+fmt(down)+' now.';
+    var out=$('result');
+    if(price<=0){out.innerHTML='<p class="err">Enter an item price above 0.</p>';return}
+    if(loan<=0){out.innerHTML='<div class="big">Paid in full</div><p class="hint">A 100% down payment leaves nothing to finance.</p>';return}
+    if(pay<=0){out.innerHTML='<p class="err">Enter a monthly payment above 0.</p>';return}
+    if(r>0&&pay<=loan*r){
+      out.innerHTML='<p class="err">That monthly payment only covers interest ('+fmt(loan*r)+' in the first month). Raise it above '+fmt(loan*r)+' to pay the loan off.</p>';return;
+    }
+    var bal=loan,months=0,interest=0,last=0;
+    while(bal>0.005&&months<1200){
+      var i=bal*r,due=bal+i,p=Math.min(pay,due);
+      interest+=i;bal=due-p;months++;last=p;
+    }
+    if(bal>0.005){out.innerHTML='<p class="err">At this payment, it would take more than 100 years. Raise the monthly payment.</p>';return}
+    var total=down+loan+interest;
+    var wD=down/total*100,wL=loan/total*100,wI=interest/total*100;
+    out.innerHTML=
+      '<div class="hint">Time to finish</div>'+
+      '<div class="big">'+span(months)+'</div>'+
+      '<div class="hint">'+months+' monthly payments, the last one is '+fmt(last)+'.</div>'+
+      '<div class="bar" role="img" aria-label="Share of total cost: down payment, loan, interest">'+
+        '<span style="width:'+wD+'%;background:var(--down)"></span>'+
+        '<span style="width:'+wL+'%;background:var(--loan)"></span>'+
+        '<span style="width:'+wI+'%;background:var(--int)"></span></div>'+
+      '<div class="legend"><span><i style="background:var(--down)"></i>Down payment</span><span><i style="background:var(--loan)"></i>Loan</span>'+(interest>0?'<span><i style="background:var(--int)"></i>Interest</span>':'')+'</div>'+
+      '<dl><dt>Item price</dt><dd>'+fmt(price)+'</dd>'+
+      '<dt>Down payment ('+pct+'%)</dt><dd>'+fmt(down)+'</dd>'+
+      '<dt>Amount financed</dt><dd>'+fmt(loan)+'</dd>'+
+      '<dt>Total interest</dt><dd>'+fmt(interest)+'</dd>'+
+      '<dt>Total you pay</dt><dd>'+fmt(total)+'</dd></dl>';
+  }
+  ['price','downPct','monthly','apr','cur'].forEach(function(id){
+    $(id).addEventListener('input',calc);$(id).addEventListener('change',calc);
+  });
+  calc();
+})();
+</script>
+</body>
+</html>
